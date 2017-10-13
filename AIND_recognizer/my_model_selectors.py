@@ -132,36 +132,39 @@ class SelectorCV(ModelSelector):
     ''' select best model based on average log Likelihood of cross-validation folds
 
     '''
+    def cv_score(self, n):
+        """
+        Calculate the average log likelihood of cross-validation folds using the KFold class
+        :return: tuple of the mean likelihood and the model with the respective score
+        """
+        scores = []
+        split_method = KFold(n_splits=2)
+
+        for train_idx, test_idx in split_method.split(self.sequences):
+            self.X, self.lengths = combine_sequences(train_idx, self.sequences)
+
+            model = self.base_model(n)
+            X, l = combine_sequences(test_idx, self.sequences)
+
+            scores.append(model.score(X, l))
+        return np.mean(scores), model
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         # TODO implement model selection using CV
         # means = []
         # Break the training set into "folds"
-        split_method = KFold(n_splits = min(len(self.sequences), 3))
-        best_logL = float("-inf")
+        try:
+            best_score = float("Inf")
+            best_model = None
+            for n in range(self.min_n_components, self.max_n_components+1):
+                score, model = self.cv_score(n)
+                if score < best_score:
+                    best_score = score
+                    best_model = model
+            return best_model
+        except:
+            return self.base_model(self.n_constant)
 
-        for component in range(self.min_n_components, self.max_n_components+1):
-            # model = self.base_model(component)
-            # Calculate model mean scores and fold them
-            # fold_scores = []
-            for train_idx, test_idx in split_method.split(self.sequences):
 
-                # Training sequences split using KFold are recombined
-                trainX, trainLength = combine_sequences(train_idx, self.sequences)
-                # Get test sequences
-                testX, testLength = combine_sequences(test_idx, self.sequences)
-                # Record each model score
-                # fold_scores.append(model.score(testX, testLength))
-                try:
-                    model = GaussianHMM(n_components = component, covariance_type="diag", n_iter = 1000,
-                    random_state = self.random_state, verbose=False).fit(trainX, trainLength)
-                    logL = model.score(testX, testLength)
-
-                    if logL > best_logL:
-                        best_logL = logL
-                        best_num_components = component
-                except:
-                    pass
-
-        return self.base_model(best_num_components)
+  
